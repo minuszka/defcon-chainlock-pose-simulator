@@ -1,0 +1,12 @@
+{
+  "populations": [150, 300, 500, 1500, 5000, 10000, 15000],
+  "controlled_shares_percent": [10, 20, 25, 30, 33.33, 35, 40, 45],
+  "profiles": [
+    {"name": "q25_22_17", "size": 25, "min_size": 22, "threshold": 17},
+    {"name": "q60_44_41", "size": 60, "min_size": 44, "threshold": 41}
+  ],
+  "rotations_per_year": 8760,
+  "monte_carlo_rounds": 10000,
+  "importance_samples": 20000,
+  "master_seed": 12648430
+}
