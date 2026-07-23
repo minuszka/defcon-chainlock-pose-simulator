@@ -31,8 +31,10 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <map>
 #include <numeric>
 #include <optional>
+#include <set>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -55,6 +57,8 @@ constexpr Profile PROFILES[]{
 constexpr int OFFLINE_PCTS[]{5, 10, 15, 20, 25, 30};
 constexpr int CONCENTRATION_PCTS[]{25, 33, 40};
 constexpr int MIXED_VERSION_PCTS[]{10, 25, 40, 50};
+constexpr int CORRELATED_GROUP_PCTS[]{10, 20, 30, 40};
+constexpr size_t ACTIVE_QUORUM_WINDOW{4};
 
 uint64_t ReadEnvU64(const char* name, uint64_t fallback)
 {
@@ -164,6 +168,41 @@ int AsnFor(uint64_t seed, uint64_t member)
            static_cast<int>(Random64(seed, 0, member, "asn") % 3);
 }
 
+int RegionFor(uint64_t seed, uint64_t member)
+{
+    const uint64_t bucket = Random64(seed, 0, member, "region") % 100;
+    if (bucket < 35) return 0;
+    if (bucket < 60) return 1;
+    if (bucket < 78) return 2;
+    if (bucket < 90) return 3;
+    return 4;
+}
+
+uint64_t OperatorFor(uint64_t seed, uint64_t member)
+{
+    const uint64_t bucket = Random64(seed, 0, member, "operator") % 100;
+    if (bucket < 10) return 0;
+    if (bucket < 15) return 1;
+    if (bucket < 18) return 2;
+    return 1000 + member;
+}
+
+uint64_t CollateralOwnerFor(uint64_t seed, uint64_t member)
+{
+    const uint64_t bucket = Random64(seed, 0, member, "collateral-owner") % 100;
+    if (bucket < 8) return 0;
+    if (bucket < 13) return 1;
+    return 100000 + member;
+}
+
+int AvailabilityClassFor(uint64_t seed, uint64_t member)
+{
+    const uint64_t bucket = Random64(seed, 0, member, "availability-class") % 100;
+    if (bucket < 70) return 0; // stable
+    if (bucket < 90) return 1; // ordinary
+    return 2;                  // fragile
+}
+
 struct Row {
     std::string scenario;
     size_t population;
@@ -183,6 +222,8 @@ class ResultWriter {
 private:
     std::ofstream csv;
     std::ofstream jsonl;
+    std::ofstream overlap_csv;
+    std::ofstream overlap_jsonl;
 
 public:
     explicit ResultWriter(const std::filesystem::path& output_dir)
@@ -190,10 +231,18 @@ public:
         std::filesystem::create_directories(output_dir);
         csv.open(output_dir / "results.csv", std::ios::out | std::ios::trunc);
         jsonl.open(output_dir / "results.jsonl", std::ios::out | std::ios::trunc);
+        overlap_csv.open(output_dir / "overlap.csv", std::ios::out | std::ios::trunc);
+        overlap_jsonl.open(output_dir / "overlap.jsonl", std::ios::out | std::ios::trunc);
         BOOST_REQUIRE_MESSAGE(csv.good(), "Unable to open CSV result file");
         BOOST_REQUIRE_MESSAGE(jsonl.good(), "Unable to open JSONL result file");
+        BOOST_REQUIRE_MESSAGE(overlap_csv.good(), "Unable to open overlap CSV result file");
+        BOOST_REQUIRE_MESSAGE(overlap_jsonl.good(), "Unable to open overlap JSONL result file");
         csv << "scenario,population,profile,round,parameter,selected,valid,"
                "dkg_complete,signable,adversarial,threshold_breach,overlap\n";
+        overlap_csv << "population,profile,round,expected_consecutive_overlap,"
+                       "observed_consecutive_overlap,active_window,repeated_members,"
+                       "max_provider_members,max_asn_members,max_operator_members,"
+                       "max_collateral_owner_members,top_provider_overlap\n";
     }
 
     void Write(const Row& row)
@@ -216,7 +265,53 @@ public:
               << ",\"threshold_breach\":" << (row.threshold_breach ? "true" : "false")
               << ",\"overlap\":" << row.overlap << "}\n";
     }
+
+    void WriteOverlap(size_t population,
+                      const Profile& profile,
+                      uint64_t round,
+                      double expected_consecutive_overlap,
+                      size_t observed_consecutive_overlap,
+                      size_t active_window,
+                      size_t repeated_members,
+                      size_t max_provider_members,
+                      size_t max_asn_members,
+                      size_t max_operator_members,
+                      size_t max_collateral_owner_members,
+                      size_t top_provider_overlap)
+    {
+        overlap_csv << population << ',' << profile.name << ',' << round << ','
+                    << std::setprecision(12) << expected_consecutive_overlap << ','
+                    << observed_consecutive_overlap << ',' << active_window << ','
+                    << repeated_members << ',' << max_provider_members << ','
+                    << max_asn_members << ',' << max_operator_members << ','
+                    << max_collateral_owner_members << ',' << top_provider_overlap << '\n';
+        overlap_jsonl << "{\"population\":" << population
+                      << ",\"profile\":\"" << profile.name
+                      << "\",\"round\":" << round
+                      << ",\"expected_consecutive_overlap\":" << std::setprecision(12)
+                      << expected_consecutive_overlap
+                      << ",\"observed_consecutive_overlap\":" << observed_consecutive_overlap
+                      << ",\"active_window\":" << active_window
+                      << ",\"repeated_members\":" << repeated_members
+                      << ",\"max_provider_members\":" << max_provider_members
+                      << ",\"max_asn_members\":" << max_asn_members
+                      << ",\"max_operator_members\":" << max_operator_members
+                      << ",\"max_collateral_owner_members\":" << max_collateral_owner_members
+                      << ",\"top_provider_overlap\":" << top_provider_overlap << "}\n";
+    }
 };
+
+template <typename KeyFn>
+size_t MaxGroupMembers(const std::vector<CDeterministicMNCPtr>& quorum, KeyFn&& key_fn)
+{
+    std::map<uint64_t, size_t> counts;
+    for (const auto& member : quorum) {
+        ++counts[static_cast<uint64_t>(key_fn(member->GetInternalId()))];
+    }
+    size_t maximum{0};
+    for (const auto& [_, count] : counts) maximum = std::max(maximum, count);
+    return maximum;
+}
 
 Row MakeAvailabilityRow(std::string scenario,
                         size_t population,
@@ -264,6 +359,7 @@ BOOST_AUTO_TEST_CASE(core_native_selection_and_fault_matrix)
 
         for (const Profile& profile : PROFILES) {
             std::vector<CDeterministicMNCPtr> previous;
+            std::vector<std::vector<CDeterministicMNCPtr>> active_history;
             std::vector<uint64_t> selection_counts(population, 0);
             double overlap_sum{0.0};
 
@@ -280,6 +376,41 @@ BOOST_AUTO_TEST_CASE(core_native_selection_and_fault_matrix)
                 const size_t overlap = CountOverlap(previous, quorum);
                 if (!previous.empty()) overlap_sum += overlap;
 
+                std::map<uint256, size_t> active_member_counts;
+                for (const auto& old_quorum : active_history) {
+                    for (const auto& member : old_quorum) ++active_member_counts[member->proTxHash];
+                }
+                for (const auto& member : quorum) ++active_member_counts[member->proTxHash];
+                const size_t repeated_members = std::accumulate(
+                    active_member_counts.begin(), active_member_counts.end(), size_t{0},
+                    [](size_t total, const auto& item) {
+                        return total + (item.second > 1 ? item.second - 1 : 0);
+                    });
+                const size_t top_provider_overlap = std::count_if(
+                    quorum.begin(), quorum.end(), [&](const auto& member) {
+                        if (ProviderFor(seed, member->GetInternalId()) != 0) return false;
+                        return std::any_of(
+                            active_history.begin(), active_history.end(), [&](const auto& old_quorum) {
+                                return std::any_of(
+                                    old_quorum.begin(), old_quorum.end(), [&](const auto& old_member) {
+                                        return old_member->proTxHash == member->proTxHash;
+                                    });
+                            });
+                    });
+                writer.WriteOverlap(
+                    population,
+                    profile,
+                    round,
+                    static_cast<double>(profile.size * profile.size) / population,
+                    overlap,
+                    active_history.size() + 1,
+                    repeated_members,
+                    MaxGroupMembers(quorum, [&](uint64_t member) { return ProviderFor(seed, member); }),
+                    MaxGroupMembers(quorum, [&](uint64_t member) { return AsnFor(seed, member); }),
+                    MaxGroupMembers(quorum, [&](uint64_t member) { return OperatorFor(seed, member); }),
+                    MaxGroupMembers(quorum, [&](uint64_t member) { return CollateralOwnerFor(seed, member); }),
+                    top_provider_overlap);
+
                 for (const int offline_pct : OFFLINE_PCTS) {
                     const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
                         return !PercentEvent(seed, round, member->GetInternalId(), "offline", offline_pct);
@@ -289,12 +420,47 @@ BOOST_AUTO_TEST_CASE(core_native_selection_and_fault_matrix)
                         quorum.size(), online, overlap));
                 }
 
+                for (const int failed_share : CORRELATED_GROUP_PCTS) {
+                    const size_t failed_count =
+                        (population * static_cast<size_t>(failed_share) + 99) / 100;
+                    const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return member->GetInternalId() >= failed_count;
+                    });
+                    writer.Write(MakeAvailabilityRow(
+                        "largest_provider_failure", population, profile, round, failed_share,
+                        quorum.size(), online, overlap));
+                    writer.Write(MakeAvailabilityRow(
+                        "largest_asn_failure", population, profile, round, failed_share,
+                        quorum.size(), online, overlap));
+                    writer.Write(MakeAvailabilityRow(
+                        "largest_region_failure", population, profile, round, failed_share,
+                        quorum.size(), online, overlap));
+                }
+
                 for (const int provider : {0, 1}) {
                     const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
                         return ProviderFor(seed, member->GetInternalId()) != provider;
                     });
                     writer.Write(MakeAvailabilityRow(
                         "provider_outage", population, profile, round, provider,
+                        quorum.size(), online, overlap));
+                }
+
+                for (const int region : {0, 1}) {
+                    const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return RegionFor(seed, member->GetInternalId()) != region;
+                    });
+                    writer.Write(MakeAvailabilityRow(
+                        "region_outage", population, profile, round, region,
+                        quorum.size(), online, overlap));
+                }
+
+                for (const int provider_count : {2, 3}) {
+                    const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return ProviderFor(seed, member->GetInternalId()) >= provider_count;
+                    });
+                    writer.Write(MakeAvailabilityRow(
+                        "multiple_provider_failure", population, profile, round, provider_count,
                         quorum.size(), online, overlap));
                 }
 
@@ -340,6 +506,28 @@ BOOST_AUTO_TEST_CASE(core_native_selection_and_fault_matrix)
                     });
                 }
 
+                for (const int concentration_pct : {10, 20, 33, 40}) {
+                    const size_t controlled_count =
+                        (population * static_cast<size_t>(concentration_pct) + 99) / 100;
+                    const size_t controlled = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return member->GetInternalId() < controlled_count;
+                    });
+                    writer.Write(Row{
+                        "collateral_owner_concentration",
+                        population,
+                        &profile,
+                        round,
+                        concentration_pct,
+                        quorum.size(),
+                        quorum.size(),
+                        true,
+                        true,
+                        controlled,
+                        controlled >= profile.threshold,
+                        overlap,
+                    });
+                }
+
                 // Markov-like deterministic flapping. A selected node is down for
                 // three consecutive rounds after entering a down epoch.
                 for (const int flap_pct : {5, 15, 30}) {
@@ -364,6 +552,43 @@ BOOST_AUTO_TEST_CASE(core_native_selection_and_fault_matrix)
                         quorum.size(), on_time, overlap));
                 }
 
+                for (const int restart_pct : {10, 20, 30}) {
+                    const size_t online = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return !PercentEvent(
+                            seed, round / 2, member->GetInternalId(), "restart-storm", restart_pct);
+                    });
+                    writer.Write(MakeAvailabilityRow(
+                        "restart_storm", population, profile, round, restart_pct,
+                        quorum.size(), online, overlap));
+                }
+
+                for (const int connected_pct : {50, 60, 70}) {
+                    const size_t connected = std::count_if(quorum.begin(), quorum.end(), [&](const auto& member) {
+                        return Random64(seed, 0, member->GetInternalId(), "partition-side") % 100 <
+                               static_cast<uint64_t>(connected_pct);
+                    });
+                    writer.Write(MakeAvailabilityRow(
+                        "partial_network_partition", population, profile, round, connected_pct,
+                        quorum.size(), connected, overlap));
+                }
+
+                const size_t availability_online = std::count_if(
+                    quorum.begin(), quorum.end(), [&](const auto& member) {
+                        const int availability_class =
+                            AvailabilityClassFor(seed, member->GetInternalId());
+                        const int offline_pct = availability_class == 0 ? 1 :
+                                                availability_class == 1 ? 5 : 30;
+                        return !PercentEvent(
+                            seed, round, member->GetInternalId(), "class-availability", offline_pct);
+                    });
+                writer.Write(MakeAvailabilityRow(
+                    "availability_classes", population, profile, round, 0,
+                    quorum.size(), availability_online, overlap));
+
+                active_history.push_back(quorum);
+                if (active_history.size() >= ACTIVE_QUORUM_WINDOW) {
+                    active_history.erase(active_history.begin());
+                }
                 previous = quorum;
             }
 

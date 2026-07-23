@@ -55,6 +55,67 @@ def main() -> None:
             f"{row['valid']},{row['adversarial']},{row['overlap']}"
         )
 
+    overlap_path = Path(sys.argv[1]) / "overlap.csv"
+    overlap_aggregates: dict[tuple[int, str], dict[str, float]] = defaultdict(
+        lambda: {
+            "count": 0,
+            "expected": 0,
+            "observed": 0,
+            "repeated": 0,
+            "provider": 0,
+            "asn": 0,
+            "operator": 0,
+            "owner": 0,
+            "outage_overlap": 0,
+            "excessive": 0,
+        }
+    )
+    with overlap_path.open(newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            key = (int(row["population"]), row["profile"])
+            item = overlap_aggregates[key]
+            item["count"] += 1
+            item["expected"] += float(row["expected_consecutive_overlap"])
+            item["observed"] += int(row["observed_consecutive_overlap"])
+            item["repeated"] += int(row["repeated_members"])
+            item["provider"] += int(row["max_provider_members"])
+            item["asn"] += int(row["max_asn_members"])
+            item["operator"] += int(row["max_operator_members"])
+            item["owner"] += int(row["max_collateral_owner_members"])
+            item["outage_overlap"] += int(row["top_provider_overlap"])
+            quorum_size = 60 if row["profile"] == "q60_44_41" else 25
+            item["excessive"] += (
+                int(row["max_provider_members"]) * 100 >= quorum_size * 40
+            )
+
+    print(
+        "\noverlap_summary: population,profile,expected_consecutive,"
+        "observed_consecutive,active_repeats,max_provider,max_asn,max_operator,"
+        "max_owner,top_provider_overlap,provider_ge_40pct"
+    )
+    for key in sorted(overlap_aggregates):
+        population, profile = key
+        item = overlap_aggregates[key]
+        count = item["count"]
+        means = [
+            item[name] / count
+            for name in (
+                "expected",
+                "observed",
+                "repeated",
+                "provider",
+                "asn",
+                "operator",
+                "owner",
+                "outage_overlap",
+            )
+        ]
+        print(
+            f"{population},{profile},"
+            + ",".join(f"{value:.4f}" for value in means)
+            + f",{pct(int(item['excessive']), int(count))}"
+        )
+
 
 if __name__ == "__main__":
     main()
