@@ -8,8 +8,6 @@ fi
 
 project_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 core_root="$(cd "$1" && pwd)"
-source_file="$project_root/core/src/test/llmq_scale_simulator_tests.cpp"
-target_file="$core_root/src/test/llmq_scale_simulator_tests.cpp"
 makefile="$core_root/src/Makefile.test.include"
 
 if [[ ! -f "$core_root/src/evo/deterministicmns.h" || ! -f "$makefile" ]]; then
@@ -17,7 +15,15 @@ if [[ ! -f "$core_root/src/evo/deterministicmns.h" || ! -f "$makefile" ]]; then
   exit 1
 fi
 
-cp "$source_file" "$target_file"
+sources=(
+  llmq_scale_simulator_tests.cpp
+  chainlock_profile_resolver_tests.cpp
+  chainlock_finality_conflict_model_tests.cpp
+)
+
+for source in "${sources[@]}"; do
+  cp "$project_root/core/src/test/$source" "$core_root/src/test/$source"
+done
 
 python3 - "$makefile" <<'PY'
 from pathlib import Path
@@ -25,17 +31,19 @@ import sys
 
 path = Path(sys.argv[1])
 text = path.read_text()
-entry = "  test/llmq_scale_simulator_tests.cpp \\\n"
-if entry in text:
-    print("Makefile entry already present")
-    raise SystemExit(0)
-
 anchor = "  test/llmq_dkg_tests.cpp \\\n"
 if anchor not in text:
     raise SystemExit("Unable to find llmq_dkg_tests.cpp anchor in Makefile.test.include")
 
-path.write_text(text.replace(anchor, anchor + entry, 1))
-print("Added llmq_scale_simulator_tests.cpp to BITCOIN_TESTS")
+entries = [
+    "  test/llmq_scale_simulator_tests.cpp \\\n",
+    "  test/chainlock_profile_resolver_tests.cpp \\\n",
+    "  test/chainlock_finality_conflict_model_tests.cpp \\\n",
+]
+missing = [entry for entry in entries if entry not in text]
+if missing:
+    path.write_text(text.replace(anchor, anchor + "".join(missing), 1))
+print(f"Ensured {len(entries)} simulator/specification tests in BITCOIN_TESTS")
 PY
 
 echo "Installed simulator into: $core_root"
