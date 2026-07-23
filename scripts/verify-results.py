@@ -37,42 +37,45 @@ def main() -> None:
     if not csv_path.is_file() or not jsonl_path.is_file():
         fail(f"missing results.csv or results.jsonl below {result_dir}")
 
+    csv_count = 0
     with csv_path.open(newline="", encoding="utf-8") as handle:
-        csv_rows = list(csv.DictReader(handle))
+        for _ in csv.DictReader(handle):
+            csv_count += 1
 
-    json_rows = []
+    if csv_count == 0:
+        fail("result set is empty")
+
+    scenarios: set[str] = set()
+    profiles: set[str] = set()
+    json_count = 0
     with jsonl_path.open(encoding="utf-8") as handle:
         for line_number, line in enumerate(handle, 1):
             try:
-                json_rows.append(json.loads(line))
+                row = json.loads(line)
             except json.JSONDecodeError as error:
                 fail(f"invalid JSONL at line {line_number}: {error}")
+            json_count += 1
+            scenarios.add(row["scenario"])
+            profiles.add(row["profile"])
+            selected = int(row["selected"])
+            valid = int(row["valid"])
+            adversarial = int(row["adversarial"])
+            if selected < 0 or valid < 0 or adversarial < 0:
+                fail(f"negative count at JSONL row {line_number}")
+            if row["scenario"] != "selection_summary":
+                if valid > selected:
+                    fail(f"valid > selected at JSONL row {line_number}")
+                if adversarial > selected:
+                    fail(f"adversarial > selected at JSONL row {line_number}")
 
-    if not csv_rows:
-        fail("result set is empty")
-    if len(csv_rows) != len(json_rows):
-        fail(f"CSV/JSONL row count differs: {len(csv_rows)} != {len(json_rows)}")
-
-    scenarios = {row["scenario"] for row in json_rows}
-    profiles = {row["profile"] for row in json_rows}
+    if csv_count != json_count:
+        fail(f"CSV/JSONL row count differs: {csv_count} != {json_count}")
     if not REQUIRED_SCENARIOS <= scenarios:
         fail(f"missing scenarios: {sorted(REQUIRED_SCENARIOS - scenarios)}")
     if profiles != REQUIRED_PROFILES:
         fail(f"unexpected profile set: {sorted(profiles)}")
-
-    for index, row in enumerate(json_rows, 1):
-        selected = int(row["selected"])
-        valid = int(row["valid"])
-        adversarial = int(row["adversarial"])
-        if selected < 0 or valid < 0 or adversarial < 0:
-            fail(f"negative count at JSONL row {index}")
-        if row["scenario"] != "selection_summary" and valid > selected:
-            fail(f"valid > selected at JSONL row {index}")
-        if adversarial > selected:
-            fail(f"adversarial > selected at JSONL row {index}")
-
     print(
-        f"Verified {len(json_rows)} rows; "
+        f"Verified {json_count} rows; "
         f"{len(scenarios)} scenarios; profiles={','.join(sorted(profiles))}"
     )
 

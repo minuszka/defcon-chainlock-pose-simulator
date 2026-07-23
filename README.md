@@ -170,6 +170,12 @@ After every wrapper run, `scripts/verify-results.py` verifies:
 - `valid <= selected`;
 - `adversarial <= selected`.
 
+Generate a compact aggregate report:
+
+```bash
+./scripts/summarize-results.py results/full
+```
+
 The generated result directory is intentionally excluded from Git.
 
 ## Determinism
@@ -208,9 +214,11 @@ core/src/test/
 scripts/
   install-into-core.sh
   run-simulator.sh
+  summarize-results.py
   uninstall-from-core.sh
   verify-results.py
 docs/
+  FULL_RUN_2026-07-23.md
   TEST_PLAN_HU.md
 ```
 
@@ -218,6 +226,9 @@ docs/
 
 The detailed Hungarian audit and multi-layer test plan is preserved in
 [docs/TEST_PLAN_HU.md](docs/TEST_PLAN_HU.md).
+
+Results from the first complete 10,000-round matrix are documented in
+[docs/FULL_RUN_2026-07-23.md](docs/FULL_RUN_2026-07-23.md).
 
 ## Status
 
