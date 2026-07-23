@@ -1,4 +1,109 @@
-# DeFCoN Core – ChainLock, LLMQ, DKG és PoSe audit- és tesztterv
+# DeFCoN ChainLock és PoSe skálaszimulátor
+
+Ez a repository futtatható, Core-native C++ tesztharnesst tartalmaz. A
+`core/src/test/llmq_scale_simulator_tests.cpp` közvetlenül a DeFCoN Core production
+`CDeterministicMNList::CalculateQuorum()` függvényét hívja, tehát a quorum selection
+algoritmust nem implementálja újra.
+
+## Gyors indítás
+
+Előfeltételek:
+
+- DeFCoN Core `v22.1.x` forrás;
+- a Core szokásos build- és tesztfüggőségei;
+- Bash és Python 3 az integrációs scripthez.
+
+WSL alatt:
+
+```bash
+git clone https://github.com/minuszka/defcon-chainlock-pose-scalability-testplan.git
+cd defcon-chainlock-pose-scalability-testplan
+
+# Tesztforrás integrálása a Core forrásba:
+./scripts/install-into-core.sh /home/stejn/DEFCON
+
+# A Core meglévő buildfolyamatával fordítsd újra a test_defcon targetet.
+cd /home/stejn/DEFCON
+make -C src test/test_defcon
+
+# Gyors futás:
+cd /path/to/defcon-chainlock-pose-scalability-testplan
+./scripts/run-simulator.sh /home/stejn/DEFCON quick
+```
+
+A teljes, 150–15 000 MN-es mátrix:
+
+```bash
+./scripts/run-simulator.sh /home/stejn/DEFCON full
+```
+
+Out-of-tree buildnél a build gyökerét add meg:
+
+```bash
+./scripts/run-simulator.sh /home/stejn/DEFCON/build quick
+```
+
+## Mit futtat a program?
+
+- valódi `CDeterministicMNList` objektumokat készít;
+- a Core saját `CalculateQuorum()` kódjával választ Q25 és Q60 quorumokat;
+- 5–30% független kiesést;
+- koncentrált provider- és ASN-kiesést;
+- 25/33/40% operator-koncentrációt;
+- 10/25/40/50% mixed-version populációt;
+- flappelő node-okat;
+- késleltetett DKG-üzeneteket modellez;
+- méri a DKG minimum és signing threshold teljesülését;
+- méri az egymást követő quorumok átfedését és selection-eloszlását;
+- CSV és JSONL eredményt készít.
+- a futás végén automatikusan ellenőrzi a két formátum sorszámát, JSON
+  érvényességét, kötelező szcenárióit és számláló-invariánsait.
+
+Quick mód:
+
+```text
+populációk: 150,300,500
+roundok:    100
+seed:       12648430
+```
+
+Full mód:
+
+```text
+populációk: 150,300,500,1500,5000,10000,15000
+roundok:    10000
+```
+
+Eredmények:
+
+```text
+results/quick/results.csv
+results/quick/results.jsonl
+```
+
+Az első implementáció a valódi Core quorum selectiont használja, a DKG hálózati
+fázisait pedig determinisztikus fault modellel értékeli. Valódi BLS/DKG
+message-state-machine és Docker/netem végrehajtás a következő implementációs réteg.
+
+## Biztonsági hatókör
+
+A telepítő kizárólag:
+
+- `src/test/llmq_scale_simulator_tests.cpp`;
+- `src/Makefile.test.include`
+
+tesztterületeket érinti. Consensus-paramétert, mainnet-konfigurációt vagy production
+ChainLock kódot nem módosít.
+
+Eltávolítás:
+
+```bash
+./scripts/uninstall-from-core.sh /home/stejn/DEFCON
+```
+
+---
+
+# Részletes audit- és tesztterv
 
 ## 0. Hatókör és reprodukálhatóság
 
