@@ -10,20 +10,25 @@ reimplement the quorum selection algorithm.
 
 ## Current scope
 
-The first implementation provides:
+The framework provides:
 
 - synthetic but genuine `CDeterministicMNList` fixtures;
 - Q25 (`25/22/17`) and candidate Q60 (`60/44/41`) profiles;
 - populations from 150 to 15,000 masternodes;
 - deterministic, reproducible simulation seeds;
+- exact hypergeometric capture probabilities and direct Monte Carlo confidence bounds;
+- reproducible, explicitly modeled importance sampling for rare events;
 - independent offline rates from 5% to 30%;
-- provider- and ASN-correlated outages;
+- provider-, ASN-, region-, operator-, and collateral-owner-correlated models;
 - flapping nodes;
-- 25%, 33%, and 40% operator concentration;
+- 10%, 20%, 33%, and 40% concentration cases;
 - 10%, 25%, 40%, and 50% mixed-version populations;
-- delayed DKG message models;
-- quorum overlap and selection distribution measurements;
+- delayed DKG messages, restart storms, and partial partitions;
+- consecutive and active-window quorum overlap and concentration measurements;
 - DKG `minSize` and signing-threshold availability checks;
+- test-only activation-resolver and finality-conflict specification models;
+- 20–40 node Docker/netem topology generation and an 8–10 operator regtest plan;
+- a non-consensus shadow-mode telemetry design;
 - CSV and JSONL output;
 - automatic result validation.
 
@@ -37,6 +42,8 @@ layers.
 The integration script changes only test-related files in a Core checkout:
 
 - `src/test/llmq_scale_simulator_tests.cpp`;
+- `src/test/chainlock_profile_resolver_tests.cpp`;
+- `src/test/chainlock_finality_conflict_model_tests.cpp`;
 - `src/Makefile.test.include`.
 
 It does not modify consensus parameters, mainnet configuration, ChainLock
@@ -143,6 +150,8 @@ The wrapper writes:
 ```text
 results/quick/results.csv
 results/quick/results.jsonl
+results/quick/overlap.csv
+results/quick/overlap.jsonl
 ```
 
 Each row contains:
@@ -178,6 +187,35 @@ Generate a compact aggregate report:
 
 The generated result directory is intentionally excluded from Git.
 
+## Exact probability and rare-event analysis
+
+```bash
+python3 analysis/security_math.py --output-dir results/security-full
+python3 analysis/importance_sampling.py --output-dir results/importance-full
+python3 analysis/export_compact_summaries.py
+```
+
+The exact analysis uses a hypergeometric tail because quorum selection is
+without replacement. The configured year estimate assumes 8,760 rotations.
+Monte Carlo results include a Wilson 95% interval, including when no breach was
+observed. Importance-sampling output is labeled `modeled_importance_sampling`;
+it is not presented as a direct observation.
+
+The checked-in `summaries/` files omit enormous exact-fraction numerators and
+denominators. Raw output remains under the ignored `results/` directory.
+
+## Docker topology
+
+Generate an opt-in 20–40 node Compose topology:
+
+```bash
+python3 docker/generate-compose.py --nodes 20 --output results/docker-compose.yml
+```
+
+See [docs/DOCKER_NETEM_PLAN.md](docs/DOCKER_NETEM_PLAN.md) before running any
+network-emulation scenario. Generation alone does not start containers or
+modify a live node.
+
 ## Determinism
 
 All fixtures, modifiers, availability events, failure-domain assignments, and
@@ -185,13 +223,14 @@ fault schedules are derived from the configured master seed. Re-running the
 same Core revision with the same configuration produces byte-identical CSV and
 JSONL output.
 
-The quick validation used during development produced:
+The current quick validation produced:
 
 ```text
-14,406 result rows
-8 scenario families
+30,606 result rows
+600 overlap rows
+17 scenario families
 2 quorum profiles
-26,106 passing Boost assertions
+26,108 passing Boost assertions
 ```
 
 ## Remove the integration
@@ -211,6 +250,18 @@ configs/
   full.env
 core/src/test/
   llmq_scale_simulator_tests.cpp
+  chainlock_profile_resolver_tests.cpp
+  chainlock_finality_conflict_model_tests.cpp
+analysis/
+  security_math.py
+  importance_sampling.py
+  export_compact_summaries.py
+docker/
+  generate-compose.py
+  netem.sh
+regtest/
+  scenarios.json
+  export_summary.py
 scripts/
   install-into-core.sh
   run-simulator.sh
@@ -218,8 +269,18 @@ scripts/
   uninstall-from-core.sh
   verify-results.py
 docs/
+  FINAL_REPORT.md
+  CURRENT_AUDIT.md
+  IMPLEMENTATION_PLAN.md
+  REGTEST_PLAN.md
+  DOCKER_NETEM_PLAN.md
+  SHADOW_MODE_DESIGN.md
+  ACCEPTANCE_CRITERIA.md
   FULL_RUN_2026-07-23.md
   TEST_PLAN_HU.md
+summaries/
+  security-probabilities.csv
+  importance-sampling.csv
 ```
 
 ## Test plan
@@ -241,14 +302,16 @@ Implemented and locally validated:
 - CSV and JSONL validation;
 - clean installation and removal from a Core worktree.
 
-Not implemented yet:
+Specification-scaffolded but not implemented in production Core:
 
 - real multi-participant BLS/DKG phase execution;
 - regtest activation and historical ChainLock verification;
 - persistent conflicting-CLSIG evidence;
-- Docker/netem orchestration;
-- testnet shadow-mode telemetry;
+- running Docker/netem orchestration;
+- emitting testnet shadow-mode telemetry;
 - CPU, memory, and bandwidth microbenchmarks.
+
+Passing this framework does not approve Q60 or any activation for mainnet.
 
 ## License
 

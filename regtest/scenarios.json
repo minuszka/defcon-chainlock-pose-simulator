@@ -1,0 +1,17 @@
+{
+  "schema": 1,
+  "logical_nodes": 20,
+  "real_operators": "8-10",
+  "scenarios": [
+    {"id": "baseline", "action": "two successful DKG cycles and continuous ChainLocks"},
+    {"id": "activation-boundary", "action": "legacy below H, Q60 V2 at and above H"},
+    {"id": "restart", "action": "restart quorum members before, during, and after DKG"},
+    {"id": "partition-50-50", "action": "isolate equal network halves and reconnect"},
+    {"id": "partition-60-40", "action": "isolate unequal halves and measure selected-member distribution"},
+    {"id": "message-delay", "action": "delay and reorder DKG and CLSIG delivery"},
+    {"id": "mixed-version", "action": "run 10%, 25%, and 40% legacy participation"},
+    {"id": "reindex", "action": "restart with reindex and reindex-chainstate"},
+    {"id": "conflict", "action": "inject two valid test-only competing evidences and reload"},
+    {"id": "pose", "action": "measure penalties, ban, recovery, and reward eligibility"}
+  ]
+}
