@@ -204,6 +204,29 @@ it is not presented as a direct observation.
 The checked-in `summaries/` files omit enormous exact-fraction numerators and
 denominators. Raw output remains under the ignored `results/` directory.
 
+## Live-calibrated fine-tuning analyses
+
+Three additional analyses, calibrated on live DeFCoN data captured through the
+deftrack explorer (`configs/deftrack-calibration.json`). They are self-contained
+Python (no Core build) and reuse the exact-math primitives:
+
+```bash
+python3 analysis/finality_conflict.py --output-dir results/finality-conflict
+python3 analysis/operational_model.py  --output-dir results/operational
+```
+
+- `finality_conflict.py` — dual-ChainLock (finality-conflict) partition model.
+  Proves `2*threshold > size` makes a single-quorum dual ChainLock impossible,
+  and quantifies the probability for profiles where it is possible (the current
+  `threshold=3` mainnet profile: ~1.0). This models DeFCoN's *actual* 2026-07
+  failure mode, not just adversarial capture.
+- `operational_model.py` — liveness under a two-regime correlated failure model
+  calibrated from observed cascade behaviour (#2), plus `O(size²)` DKG cost and
+  per-round PoSe exposure (`effective_size / population`) (#3).
+
+See [docs/FINETUNE_REPORT.md](docs/FINETUNE_REPORT.md) for method, results, and
+the live-data provenance.
+
 ## Docker topology
 
 Generate an opt-in 20–40 node Compose topology:

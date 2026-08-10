@@ -1,0 +1,7 @@
+population_label,population,profile,size,effective_size,min_size,threshold,dkg_form_quiet,dkg_form_cascade,dkg_form_blended,sign_quiet,sign_cascade,sign_blended,dkg_messages_n2,dkg_cost_rel_q25,pose_exposure_per_round
+healthy_floor,150,mainnet_400_4_3,400,150,4,3,1.00000,1.00000,1.00000,1.00000,1.00000,1.00000,159600,266.0,1.0
+healthy_floor,150,q25_22_17,25,25,22,17,0.86491,0.00237,0.74933,0.99992,0.27353,0.90258,600,1.0,0.167
+healthy_floor,150,q60_44_41,60,60,44,41,1.00000,0.02208,0.86896,1.00000,0.11696,0.88167,3540,5.9,0.4
+observed_low,76,mainnet_400_4_3,400,76,4,3,1.00000,1.00000,1.00000,1.00000,1.00000,1.00000,159600,266.0,1.0
+observed_low,76,q25_22_17,25,25,22,17,0.86491,0.00237,0.74933,0.99992,0.27353,0.90258,600,1.0,0.329
+observed_low,76,q60_44_41,60,60,44,41,1.00000,0.02208,0.86896,1.00000,0.11696,0.88167,3540,5.9,0.789

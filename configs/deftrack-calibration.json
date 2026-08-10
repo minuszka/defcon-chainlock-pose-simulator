@@ -1,0 +1,56 @@
+{
+  "_comment": "Fault-model calibration derived from the live DeFCoN network via the deftrack explorer. OBSERVED fields are measured; DERIVED/ASSUMED fields are modeled from the observations and are labeled as such. Source: deftrack MongoDB (defcon_explorer), collections masternodeevents + networknoiseobservations, 14-day window ending 2026-08-10.",
+  "provenance": {
+    "captured_at": "2026-08-10",
+    "window_days": 14,
+    "source": "deftrack explorer MongoDB (masternodeevents, networknoiseobservations)",
+    "note": "noise-signal fields come from ~15 monitored nodes; masternodeevents cover the full registered set"
+  },
+  "network": {
+    "registered_total_observed": 212,
+    "enabled_healthy_floor": 150,
+    "enabled_observed_low": 76,
+    "_enabled_note": "The 76 low is a transient PoSe-drop artifact; the design regime is the >=150 healthy floor."
+  },
+  "pose_churn_observed_14d": {
+    "distinct_mns_touched_pose": 164,
+    "ban_ward_transitions": 301,
+    "revives_pose_banned_to_enabled": 76,
+    "transitions": {
+      "ENABLED->POSE_PENALTY": 165,
+      "POSE_PENALTY->POSE_BANNED": 124,
+      "POSE_BAN_HEIGHT->POSE_BANNED": 91,
+      "ENABLED->POSE_BANNED": 43,
+      "NEW->POSE_BANNED": 43,
+      "POSE_BANNED->ENABLED": 76,
+      "POSE_PENALTY->ENABLED": 34,
+      "POSE_BAN_HEIGHT->ENABLED": 32
+    },
+    "daily_ban_events": {
+      "07-27": 1, "07-28": 50, "07-29": 2, "07-30": 56, "07-31": 1,
+      "08-01": 39, "08-02": 1, "08-03": 2, "08-04": 1, "08-05": 21,
+      "08-06": 1, "08-09": 246, "08-10": 45
+    }
+  },
+  "noise_signals_observed_14d": {
+    "chain_tip_divergence": 15945,
+    "peer_rejection": 7046,
+    "chainlock_conflict": 5336,
+    "llmq_quorum": 3526,
+    "pose_instability": 956,
+    "pose_instability_active_hours": 45,
+    "pose_instability_window_hours": 336,
+    "pose_instability_mean_per_active_hour": 21.24,
+    "pose_instability_max_per_hour": 103
+  },
+  "fault_model": {
+    "_derivation": "Two-regime (quiet vs cascade) correlated failure model. The network is NOT in independent-offline steady state: PoSe/DKG failures cluster into cascades (13.4% of hours carry pose activity; daily ban spikes up to 246 vs a ~1.5 median). Independent-offline sims understate real failure; these parameters drive a correlated model instead.",
+    "cascade_hour_fraction": 0.134,
+    "cascade_burst_ratio": 4.8,
+    "member_online_rate_quiet": 0.92,
+    "member_online_rate_cascade": 0.60,
+    "_online_rate_note": "DERIVED/ASSUMED: quiet 0.92 reflects normal MN availability; cascade 0.60 anchors to the report's severe single-domain (40%) correlated case and the observed cascade behaviour. Treat as a modeled band, not a direct measurement.",
+    "partition_split_ratios": [0.5, 0.6, 0.7],
+    "_partition_note": "Fraction of the active quorum's members that land on the larger side of a network partition; 0.5 = worst case for dual-signing."
+  }
+}
