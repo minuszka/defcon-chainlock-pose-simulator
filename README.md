@@ -213,6 +213,7 @@ Python (no Core build) and reuse the exact-math primitives:
 ```bash
 python3 analysis/finality_conflict.py --output-dir results/finality-conflict
 python3 analysis/operational_model.py  --output-dir results/operational
+python3 analysis/reward_window.py      --output-dir results/reward-window
 ```
 
 - `finality_conflict.py` — dual-ChainLock (finality-conflict) partition model.
@@ -223,6 +224,10 @@ python3 analysis/operational_model.py  --output-dir results/operational
 - `operational_model.py` — liveness under a two-regime correlated failure model
   calibrated from observed cascade behaviour (#2), plus `O(size²)` DKG cost and
   per-round PoSe exposure (`effective_size / population`) (#3).
+- `reward_window.py` — dead-MN reward window: how long a STOPPED masternode keeps
+  earning before PoSe-ban, using the ground-truth single-active-quorum (ChainLock)
+  model. Shows the bare Q60 resize lets a stopped MN earn for days (growing with
+  N), and that a liveness probe restores a flat ~4h window at any scale.
 
 See [docs/FINETUNE_REPORT.md](docs/FINETUNE_REPORT.md) for method, results, and
 the live-data provenance.

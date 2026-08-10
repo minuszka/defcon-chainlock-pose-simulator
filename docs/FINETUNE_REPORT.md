@@ -108,6 +108,39 @@ q25 is cheaper and lower-exposure, but **fails on adversarial safety** and is
 **more fragile** under correlated load. q60 wins the two criteria that matter
 most (adversarial safety + cascade liveness) at an acceptable cost premium.
 
+## Result 4 — dead-MN reward window (release item #3)
+
+A stopped masternode keeps earning until it is PoSe-banned. Ground truth from
+mainnet `quorum list` (2026-08-10): the ONLY quorum type that actually forms is
+`llmq_400_60` (ChainLock) — `400_85` is empty (minSize 350), `60_75`/`100_67`
+are not deployed. So the ChainLock quorum is the **sole PoSe tester**, which is
+exactly why item #3 is coupled to the #2 resize. `reward_window.py` Monte-Carlos
+the blocks-until-ban of a stopped MN (penalty +CalcPenalty(66) per selected-and-
+failed DKG, −1/block decay, ban at max(100,N)).
+
+Median reward window of a stopped MN:
+
+| Profile | N=150 | N=300 | N=500 | N=1000 |
+|---|---|---|---|---|
+| current 400/4/3 | 9h | 6h | 6h | 12h |
+| **q60 (bare resize)** | **54h** | 57h | 90h | **180h (7.5 days)** |
+| q60 + hourly DKG (Layer 1) | 5h | 10h | 17h | 33h |
+| q60 + liveness probe /2h (Layer 2) | **4h** | 4h | 4h | **4h** |
+
+**Interpretation.** The bare Q60 resize (#2 alone) blows the dead-MN window up to
+days, and it grows with network size (up to ~7.5 days at N=1000) — because the
+ChainLock DKG now selects only 60/N members and the −1/block decay erases the
+penalty between sparse selections. This is the #3 gap, quantified.
+
+- **Layer 1 (hourly ChainLock DKG):** helps at small N but degrades with scale
+  (33h at N=1000) — selection is still 60/N, so it does not solve large networks.
+- **Layer 2 (quorum-attested liveness probe every 2h):** a flat ~4h at every N —
+  coverage-independent, the actual fix at scale.
+
+This validates the staged plan: ship the resize (#2) together with a #3 mitigation
+(Layer 1 tuning is cheap and consensus-safe; the Layer 2 probe is the scale-proof
+fix and warrants its own audit/regtest before bundling with a consensus change).
+
 ## Caveats
 
 - `member_online_rate_cascade = 0.60` is a modeled anchor; liveness numbers are
